@@ -145,12 +145,15 @@ This server uses the standard MCP protocol over stdio, so it can be integrated w
 ```
 weather-mcp-server/
 ├── src/
-│   └── index.ts          # Main server implementation
+│   └── index.ts          # Main MCP server implementation
 ├── dist/
 │   └── index.js          # Compiled JavaScript output
+├── http-proxy.js         # HTTP proxy wrapper for MCP server
+├── test-integration.js   # Integration test suite
 ├── package.json          # Dependencies and scripts
 ├── tsconfig.json         # TypeScript configuration
 ├── CLAUDE.md            # Claude Code instructions
+├── INTEGRATION.md       # Integration guide for Next.js
 └── README.md            # This file
 ```
 
@@ -159,11 +162,24 @@ weather-mcp-server/
 - `npm run build` - Compile TypeScript to JavaScript
 - `npm run dev` - Run in development mode with hot reload
 - `npm start` - Run the compiled production build
+- `npm run proxy` - Build and start HTTP proxy server on port 3002
+- `npm test` - Run integration tests (requires proxy to be running)
 - `npm run test:inspector` - Test with MCP Inspector (interactive UI)
 
 ### Testing
 
-The easiest way to test the server is using the MCP Inspector:
+**Option 1: Integration Tests** (Recommended)
+
+Start the HTTP proxy and run automated tests:
+```bash
+# Terminal 1: Start the proxy
+npm run proxy
+
+# Terminal 2: Run tests
+npm test
+```
+
+**Option 2: MCP Inspector** (Interactive UI)
 
 ```bash
 npm run test:inspector
@@ -179,7 +195,10 @@ This will open a web interface where you can:
 
 1. Edit `src/index.ts` to modify or add tools
 2. Run `npm run build` to compile
-3. Test with `npm run test:inspector` or restart your MCP client
+3. Test using one of these methods:
+   - `npm run proxy` then `npm test` for automated tests
+   - `npm run test:inspector` for interactive testing
+   - Restart your MCP client (e.g., Claude Desktop)
 
 ## API Reference
 
