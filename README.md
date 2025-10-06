@@ -72,7 +72,27 @@ npm run build
 
 ## Usage
 
-### Running the Server
+### Quick Start with HTTP Proxy (Recommended for Testing)
+
+**Start the HTTP proxy server**:
+```bash
+npm run proxy
+```
+
+This will build and start an HTTP server on `http://localhost:3002` that wraps the MCP server.
+
+**Test it**:
+```bash
+# In a new terminal
+npm test
+
+# Or test manually
+curl "http://localhost:3002/weather/current?city=Manila&country=PH"
+```
+
+See **[INTEGRATION.md](./INTEGRATION.md)** for integrating with your Next.js app.
+
+### Running the MCP Server Directly
 
 **Development mode** (with hot reload):
 ```bash
