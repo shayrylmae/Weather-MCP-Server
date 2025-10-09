@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather MCP SSE Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        .output {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 500px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #34495e;
+        }
+        .message:last-child {
+            border-bottom: none;
+        }
+        .timestamp {
+            color: #95a5a6;
+            font-size: 11px;
+        }
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌦️ Weather MCP Server - SSE Test Client</h1>
+
+        <div class="info">
+            <strong>Note:</strong> This is a simple test client for the SSE transport.
+            The SSE endpoint establishes a persistent connection for bidirectional MCP communication.
+        </div>
+
+        <div id="status" class="status disconnected">
+            ⚠️ Not Connected
+        </div>
+
+        <div class="controls">
+            <input type="text" id="cityInput" placeholder="Enter city name (e.g., Manila, London, Tokyo)" value="Manila">
+            <button id="currentBtn" onclick="getCurrentWeather()">Get Current Weather</button>
+            <button id="forecastBtn" onclick="getForecast()">Get 3-Day Forecast</button>
+        </div>
+
+        <h2>Output:</h2>
+        <div id="output" class="output">
+            <div class="message">
+                <div class="timestamp">[System]</div>
+                Waiting to connect to SSE server...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let messageId = 1;
+        const SERVER_URL = 'http://localhost:3003';
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            messageDiv.innerHTML = `
+                <div class="timestamp">[${timestamp}] ${type.toUpperCase()}</div>
+                <div>${message}</div>
+            `;
+            output.appendChild(messageDiv);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            const status = document.getElementById('status');
+            if (connected) {
+                status.className = 'status connected';
+                status.textContent = '✅ Connected to SSE Server';
+            } else {
+                status.className = 'status disconnected';
+                status.textContent = '⚠️ Disconnected';
+            }
+        }
+
+        async function sendMCPMessage(method, params) {
+            try {
+                const message = {
+                    jsonrpc: '2.0',
+                    id: messageId++,
+                    method: method,
+                    params: params
+                };
+
+                log(`Sending: ${JSON.stringify(message, null, 2)}`, 'request');
+
+                const response = await fetch(`${SERVER_URL}/message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(message)
+                });
+
+                const result = await response.json();
+                log(`Response: ${JSON.stringify(result, null, 2)}`, 'response');
+
+                return result;
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        async function getCurrentWeather() {
+            const city = document.getElementById('cityInput').value;
+            if (!city) {
+                alert('Please enter a city name');
+                return;
+            }
+
+            try {
+                await sendMCPMessage('tools/call', {
+                    name: 'get_current_weather',
+                    arguments: { city: city }
+                });
+            } catch (error) {
+                console.error('Failed to get current weather:', error);
+            }
+        }
+
+        async function getForecast() {
+            const city = document.getElementById('cityInput').value;
+            if (!city) {
+                alert('Please enter a city name');
+                return;
+            }
+
+            try {
+                await sendMCPMessage('tools/call', {
+                    name: 'get_weather_forecast',
+                    arguments: { city: city, days: 3 }
+                });
+            } catch (error) {
+                console.error('Failed to get forecast:', error);
+            }
+        }
+
+        // Test server connection
+        async function testConnection() {
+            try {
+                const response = await fetch(`${SERVER_URL}/health`);
+                const data = await response.json();
+                log(`✅ Server is running: ${JSON.stringify(data)}`, 'system');
+                updateStatus(true);
+            } catch (error) {
+                log(`❌ Failed to connect to server: ${error.message}`, 'error');
+                log(`Make sure the server is running: npm run start:sse`, 'error');
+                updateStatus(false);
+            }
+        }
+
+        // Initialize on page load
+        window.onload = () => {
+            testConnection();
+            log('SSE Test Client Ready!', 'system');
+            log('Note: This is a simplified test client. Full SSE streaming requires EventSource API.', 'info');
+        };
+    </script>
+</body>
+</html>

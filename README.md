@@ -72,25 +72,57 @@ npm run build
 
 ## Usage
 
-### Quick Start with HTTP Proxy (Recommended for Testing)
+### Deployment Options
 
-**Start the HTTP proxy server**:
+This server supports multiple transport modes:
+
+#### 1. **SSE Transport** (Recommended for HTTP) ⭐
+
+Server-Sent Events transport provides a persistent, stateful connection over HTTP.
+
 ```bash
-npm run proxy
+npm run dev:sse    # Development (port 3003)
+npm run start:sse  # Production (port 3003)
 ```
 
-This will build and start an HTTP server on `http://localhost:3002` that wraps the MCP server.
+**Benefits:**
+- ✅ Persistent connection maintains state across tool calls
+- ✅ Native MCP protocol support over HTTP
+- ✅ Better efficiency for streaming AI interactions
+- ✅ Standards-compliant SSE implementation
 
-**Test it**:
+**Test it:**
 ```bash
-# In a new terminal
-npm test
+curl http://localhost:3003/health
+curl http://localhost:3003/
+```
 
-# Or test manually
+#### 2. **HTTP Proxy** (Simple REST API)
+
+Request-response HTTP wrapper for quick testing and REST API usage.
+
+```bash
+npm run proxy      # Runs on port 3002
+```
+
+**Test it:**
+```bash
+npm test
 curl "http://localhost:3002/weather/current?city=Manila&country=PH"
 ```
 
+#### 3. **Stdio Transport** (Original)
+
+Standard MCP over stdio for Claude Desktop and MCP Inspector.
+
+```bash
+npm run dev        # Development
+npm start          # Production
+```
+
 See **[INTEGRATION.md](./INTEGRATION.md)** for integrating with your Next.js app.
+
+> 📖 **For detailed information about improvements and architecture**, see **[IMPROVEMENTS.md](./IMPROVEMENTS.md)**
 
 ### Running the MCP Server Directly
 
@@ -145,24 +177,29 @@ This server uses the standard MCP protocol over stdio, so it can be integrated w
 ```
 weather-mcp-server/
 ├── src/
-│   └── index.ts          # Main MCP server implementation
+│   ├── index.ts          # Main MCP server (stdio transport)
+│   └── sse-server.ts     # SSE transport server (NEW)
 ├── dist/
-│   └── index.js          # Compiled JavaScript output
-├── http-proxy.js         # HTTP proxy wrapper for MCP server
+│   ├── index.js          # Compiled stdio server
+│   └── sse-server.js     # Compiled SSE server
+├── http-proxy.js         # HTTP proxy wrapper (refactored)
 ├── test-integration.js   # Integration test suite
 ├── package.json          # Dependencies and scripts
 ├── tsconfig.json         # TypeScript configuration
 ├── CLAUDE.md            # Claude Code instructions
 ├── INTEGRATION.md       # Integration guide for Next.js
+├── IMPROVEMENTS.md      # Detailed improvements documentation (NEW)
 └── README.md            # This file
 ```
 
 ### Available Scripts
 
 - `npm run build` - Compile TypeScript to JavaScript
-- `npm run dev` - Run in development mode with hot reload
-- `npm start` - Run the compiled production build
-- `npm run proxy` - Build and start HTTP proxy server on port 3002
+- `npm run dev` - Run stdio transport in development mode
+- `npm run dev:sse` - Run SSE transport in development mode (port 3003) ⭐
+- `npm start` - Run the compiled stdio transport
+- `npm run start:sse` - Run the compiled SSE transport (port 3003) ⭐
+- `npm run proxy` - Build and start HTTP proxy server (port 3002)
 - `npm test` - Run integration tests (requires proxy to be running)
 - `npm run test:inspector` - Test with MCP Inspector (interactive UI)
 

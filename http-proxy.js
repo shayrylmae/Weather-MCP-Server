@@ -70,7 +70,60 @@ function waitForReady() {
   });
 }
 
-// Function to call MCP tool
+// ============================================
+// HELPER FUNCTIONS FOR API CALL HANDLING
+// ============================================
+
+/**
+ * Sends a standardized error response
+ */
+function sendErrorResponse(res, statusCode, errorMessage) {
+  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: errorMessage }));
+}
+
+/**
+ * Parses the MCP tool response and extracts the data
+ */
+function parseToolResponse(response) {
+  // Check if MCP server returned an error
+  if (response.result?.isError) {
+    const errorText = response.result?.content?.[0]?.text || 'Unknown error';
+    throw new Error(errorText);
+  }
+
+  // Extract the text content from MCP response
+  const data = response.result?.content?.[0]?.text
+    ? JSON.parse(response.result.content[0].text)
+    : response.result;
+
+  return data;
+}
+
+/**
+ * Unified handler for MCP tool calls with error handling
+ */
+async function handleMCPToolCall(toolName, args, res) {
+  try {
+    console.log(`[HTTP Proxy] Calling tool: ${toolName}`, args);
+    const response = await callMCPTool(toolName, args);
+    const data = parseToolResponse(response);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error(`[HTTP Proxy] Error calling ${toolName}:`, error.message);
+    sendErrorResponse(res, 500, error.message);
+  }
+}
+
+// ============================================
+// MCP COMMUNICATION
+// ============================================
+
+/**
+ * Function to call MCP tool
+ */
 async function callMCPTool(toolName, args, timeout = 30000) {
   await waitForReady();
 
@@ -173,37 +226,14 @@ const httpServer = createServer(async (req, res) => {
   if (req.method === 'GET' && urlPath === '/weather/current') {
     const params = parseQuery(req.url);
     if (!params.city) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing required parameter: city' }));
+      sendErrorResponse(res, 400, 'Missing required parameter: city');
       return;
     }
 
-    try {
-      const args = { city: params.city };
-      if (params.country) args.country = params.country;
+    const args = { city: params.city };
+    if (params.country) args.country = params.country;
 
-      console.log(`[HTTP Proxy] Getting current weather for ${params.city}`);
-      const response = await callMCPTool('get_current_weather', args);
-
-      // Check if MCP server returned an error
-      if (response.result?.isError) {
-        const errorText = response.result?.content?.[0]?.text || 'Unknown error';
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: errorText }));
-        return;
-      }
-
-      // Extract the text content from MCP response
-      const data = response.result?.content?.[0]?.text
-        ? JSON.parse(response.result.content[0].text)
-        : response.result;
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error('[HTTP Proxy] Error:', error.message);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: error.message }));
-    }
+    await handleMCPToolCall('get_current_weather', args, res);
     return;
   }
 
@@ -211,37 +241,15 @@ const httpServer = createServer(async (req, res) => {
   if (req.method === 'GET' && urlPath === '/weather/forecast') {
     const params = parseQuery(req.url);
     if (!params.city) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing required parameter: city' }));
+      sendErrorResponse(res, 400, 'Missing required parameter: city');
       return;
     }
 
-    try {
-      const args = { city: params.city };
-      if (params.country) args.country = params.country;
-      if (params.days) args.days = parseInt(params.days);
+    const args = { city: params.city };
+    if (params.country) args.country = params.country;
+    if (params.days) args.days = parseInt(params.days);
 
-      console.log(`[HTTP Proxy] Getting forecast for ${params.city}`);
-      const response = await callMCPTool('get_weather_forecast', args);
-
-      // Check if MCP server returned an error
-      if (response.result?.isError) {
-        const errorText = response.result?.content?.[0]?.text || 'Unknown error';
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: errorText }));
-        return;
-      }
-
-      const data = response.result?.content?.[0]?.text
-        ? JSON.parse(response.result.content[0].text)
-        : response.result;
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error('[HTTP Proxy] Error:', error.message);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: error.message }));
-    }
+    await handleMCPToolCall('get_weather_forecast', args, res);
     return;
   }
 
@@ -249,36 +257,14 @@ const httpServer = createServer(async (req, res) => {
   if (req.method === 'GET' && urlPath === '/weather/alerts') {
     const params = parseQuery(req.url);
     if (!params.city) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing required parameter: city' }));
+      sendErrorResponse(res, 400, 'Missing required parameter: city');
       return;
     }
 
-    try {
-      const args = { city: params.city };
-      if (params.country) args.country = params.country;
+    const args = { city: params.city };
+    if (params.country) args.country = params.country;
 
-      console.log(`[HTTP Proxy] Getting alerts for ${params.city}`);
-      const response = await callMCPTool('get_weather_alerts', args);
-
-      // Check if MCP server returned an error
-      if (response.result?.isError) {
-        const errorText = response.result?.content?.[0]?.text || 'Unknown error';
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: errorText }));
-        return;
-      }
-
-      const data = response.result?.content?.[0]?.text
-        ? JSON.parse(response.result.content[0].text)
-        : response.result;
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error('[HTTP Proxy] Error:', error.message);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: error.message }));
-    }
+    await handleMCPToolCall('get_weather_alerts', args, res);
     return;
   }
 
@@ -286,37 +272,15 @@ const httpServer = createServer(async (req, res) => {
   if (req.method === 'GET' && urlPath === '/weather/growing') {
     const params = parseQuery(req.url);
     if (!params.city) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing required parameter: city' }));
+      sendErrorResponse(res, 400, 'Missing required parameter: city');
       return;
     }
 
-    try {
-      const args = { city: params.city };
-      if (params.country) args.country = params.country;
-      if (params.baseTemp) args.base_temp = parseFloat(params.baseTemp);
+    const args = { city: params.city };
+    if (params.country) args.country = params.country;
+    if (params.baseTemp) args.base_temp = parseFloat(params.baseTemp);
 
-      console.log(`[HTTP Proxy] Getting growing conditions for ${params.city}`);
-      const response = await callMCPTool('get_growing_conditions', args);
-
-      // Check if MCP server returned an error
-      if (response.result?.isError) {
-        const errorText = response.result?.content?.[0]?.text || 'Unknown error';
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: errorText }));
-        return;
-      }
-
-      const data = response.result?.content?.[0]?.text
-        ? JSON.parse(response.result.content[0].text)
-        : response.result;
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error('[HTTP Proxy] Error:', error.message);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: error.message }));
-    }
+    await handleMCPToolCall('get_growing_conditions', args, res);
     return;
   }
 
@@ -324,40 +288,18 @@ const httpServer = createServer(async (req, res) => {
   if (req.method === 'GET' && urlPath === '/weather/historical') {
     const params = parseQuery(req.url);
     if (!params.city || !params.month) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing required parameters: city, month' }));
+      sendErrorResponse(res, 400, 'Missing required parameters: city, month');
       return;
     }
 
-    try {
-      const args = {
-        city: params.city,
-        month: parseInt(params.month)
-      };
-      if (params.country) args.country = params.country;
-      if (params.yearsBack) args.years_back = parseInt(params.yearsBack);
+    const args = {
+      city: params.city,
+      month: parseInt(params.month)
+    };
+    if (params.country) args.country = params.country;
+    if (params.yearsBack) args.years_back = parseInt(params.yearsBack);
 
-      console.log(`[HTTP Proxy] Getting historical weather for ${params.city}`);
-      const response = await callMCPTool('get_historical_weather', args);
-
-      // Check if MCP server returned an error
-      if (response.result?.isError) {
-        const errorText = response.result?.content?.[0]?.text || 'Unknown error';
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: errorText }));
-        return;
-      }
-
-      const data = response.result?.content?.[0]?.text
-        ? JSON.parse(response.result.content[0].text)
-        : response.result;
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error('[HTTP Proxy] Error:', error.message);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: error.message }));
-    }
+    await handleMCPToolCall('get_historical_weather', args, res);
     return;
   }
 
