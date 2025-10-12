@@ -177,19 +177,23 @@ This server uses the standard MCP protocol over stdio, so it can be integrated w
 ```
 weather-mcp-server/
 ├── src/
-│   ├── index.ts          # Main MCP server (stdio transport)
-│   └── sse-server.ts     # SSE transport server (NEW)
+│   ├── index.ts                   # Main MCP server (stdio transport)
+│   ├── sse-server.ts             # SSE transport server with routing (modified)
+│   ├── sse-server-fixed.ts       # SSE server variant (untracked)
+│   └── sse-server-with-routing.ts # SSE server variant (untracked)
 ├── dist/
-│   ├── index.js          # Compiled stdio server
-│   └── sse-server.js     # Compiled SSE server
-├── http-proxy.js         # HTTP proxy wrapper (refactored)
-├── test-integration.js   # Integration test suite
-├── package.json          # Dependencies and scripts
-├── tsconfig.json         # TypeScript configuration
-├── CLAUDE.md            # Claude Code instructions
-├── INTEGRATION.md       # Integration guide for Next.js
-├── IMPROVEMENTS.md      # Detailed improvements documentation (NEW)
-└── README.md            # This file
+│   ├── index.js                   # Compiled stdio server
+│   └── sse-server.js             # Compiled SSE server
+├── http-proxy.js                  # HTTP proxy wrapper (11KB)
+├── test-integration.js            # Integration test suite
+├── test-sse.html                  # SSE transport test page
+├── package.json                   # Dependencies and scripts
+├── tsconfig.json                  # TypeScript configuration
+├── CLAUDE.md                      # Claude Code instructions
+├── INTEGRATION.md                 # Integration guide for Next.js
+├── IMPROVEMENTS.md                # Detailed improvements documentation
+├── CHANGELOG.md                   # Version history and changes
+└── README.md                      # This file
 ```
 
 ### Available Scripts
@@ -202,6 +206,7 @@ weather-mcp-server/
 - `npm run proxy` - Build and start HTTP proxy server (port 3002)
 - `npm test` - Run integration tests (requires proxy to be running)
 - `npm run test:inspector` - Test with MCP Inspector (interactive UI)
+- `npm run test:manual` - Run manual tests
 
 ### Testing
 
@@ -327,12 +332,20 @@ This server uses the [Open-Meteo API](https://open-meteo.com/), which provides:
 
 ## Technical Details
 
-- **Protocol**: Model Context Protocol (MCP) via stdio
+- **Protocol**: Model Context Protocol (MCP)
+- **Transport Modes**:
+  - Stdio (standard MCP)
+  - Server-Sent Events (SSE) with message routing
+  - HTTP Proxy (REST API wrapper)
 - **Language**: TypeScript with Node.js
 - **Runtime**: Node.js 16+
 - **Dependencies**:
-  - `@modelcontextprotocol/sdk` - MCP framework
-  - `zod` - Runtime type validation
+  - `@modelcontextprotocol/sdk` (^1.18.2) - MCP framework
+  - `zod` (^3.25.76) - Runtime type validation
+- **Dev Dependencies**:
+  - `tsx` (^4.20.6) - TypeScript execution
+  - `typescript` (^5.9.3) - TypeScript compiler
+  - `@types/node` (^24.6.1) - Node.js type definitions
 - **APIs Used**:
   - Open-Meteo Forecast API
   - Open-Meteo Geocoding API
