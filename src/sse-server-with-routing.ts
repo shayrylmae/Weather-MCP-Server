@@ -463,7 +463,7 @@ function createMCPServer(): Server {
 // ============================================
 // HTTP SERVER WITH MESSAGE ROUTING
 // ============================================
-const PORT = process.env.PORT || 3003;
+const PORT = parseInt(process.env.PORT || '3003', 10);
 const registry = new ConnectionRegistry();
 
 // Helper to read POST body
