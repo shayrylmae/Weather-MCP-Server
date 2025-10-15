@@ -117,8 +117,16 @@
 
         <div class="controls">
             <input type="text" id="cityInput" placeholder="Enter city name (e.g., Manila, London, Tokyo)" value="Manila">
-            <button id="currentBtn" onclick="getCurrentWeather()">Get Current Weather</button>
-            <button id="forecastBtn" onclick="getForecast()">Get 3-Day Forecast</button>
+            <button id="currentBtn" onclick="getCurrentWeather()">Current Weather</button>
+            <button id="forecastBtn" onclick="getForecast()">7-Day Forecast</button>
+            <button id="alertsBtn" onclick="getWeatherAlerts()">Weather Alerts</button>
+        </div>
+
+        <div class="controls">
+            <input type="number" id="monthInput" placeholder="Month (1-12)" min="1" max="12" style="flex: 0.5;">
+            <input type="number" id="yearsInput" placeholder="Years back (1-10)" min="1" max="10" value="3" style="flex: 0.5;">
+            <button id="historicalBtn" onclick="getHistoricalWeather()">Historical Data</button>
+            <button id="growingBtn" onclick="getGrowingConditions()">Growing Conditions</button>
         </div>
 
         <h2>Output:</h2>
@@ -132,7 +140,9 @@
 
     <script>
         let messageId = 1;
-        const SERVER_URL = 'http://localhost:3003';
+        // Change this to test locally or on Render
+        const SERVER_URL = 'https://weather-mcp-server-67ou.onrender.com';
+        // const SERVER_URL = 'http://localhost:3003';  // Uncomment for local testing
 
         function log(message, type = 'info') {
             const output = document.getElementById('output');
@@ -214,10 +224,77 @@
             try {
                 await sendMCPMessage('tools/call', {
                     name: 'get_weather_forecast',
-                    arguments: { city: city, days: 3 }
+                    arguments: { city: city, country: 'PH', days: 7 }
                 });
             } catch (error) {
                 console.error('Failed to get forecast:', error);
+            }
+        }
+
+        async function getWeatherAlerts() {
+            const city = document.getElementById('cityInput').value;
+            if (!city) {
+                alert('Please enter a city name');
+                return;
+            }
+
+            try {
+                await sendMCPMessage('tools/call', {
+                    name: 'get_weather_alerts',
+                    arguments: { city: city, country: 'PH' }
+                });
+            } catch (error) {
+                console.error('Failed to get weather alerts:', error);
+            }
+        }
+
+        async function getHistoricalWeather() {
+            const city = document.getElementById('cityInput').value;
+            const monthInput = document.getElementById('monthInput').value;
+            const yearsInput = document.getElementById('yearsInput').value;
+
+            if (!city) {
+                alert('Please enter a city name');
+                return;
+            }
+
+            // Default to current month if not specified
+            const month = monthInput || new Date().getMonth() + 1;
+            const yearsBack = yearsInput || 3;
+
+            try {
+                await sendMCPMessage('tools/call', {
+                    name: 'get_historical_weather',
+                    arguments: {
+                        city: city,
+                        country: 'PH',
+                        month: parseInt(month),
+                        years_back: parseInt(yearsBack)
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to get historical weather:', error);
+            }
+        }
+
+        async function getGrowingConditions() {
+            const city = document.getElementById('cityInput').value;
+            if (!city) {
+                alert('Please enter a city name');
+                return;
+            }
+
+            try {
+                await sendMCPMessage('tools/call', {
+                    name: 'get_growing_conditions',
+                    arguments: {
+                        city: city,
+                        country: 'PH',
+                        base_temp: 10
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to get growing conditions:', error);
             }
         }
 
