@@ -589,8 +589,8 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
   res.end(JSON.stringify({ error: 'Not found' }));
 });
 
-httpServer.listen(PORT, () => {
-  console.error(`\n✅ Weather MCP Server (SSE with Routing) running on http://localhost:${PORT}`);
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.error(`\n✅ Weather MCP Server (SSE with Routing) running on http://0.0.0.0:${PORT}`);
   console.error(`\n📡 Transport: Server-Sent Events with message routing`);
   console.error(`   - Persistent stateful connections`);
   console.error(`   - Session-based message routing`);
