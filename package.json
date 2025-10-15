@@ -25,11 +25,11 @@
   "license": "ISC",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.2",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@types/node": "^24.6.1",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@types/node": "^24.6.1",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "tsx": "^4.20.6"
   }
 }
