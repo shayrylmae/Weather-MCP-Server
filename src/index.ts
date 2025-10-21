@@ -74,6 +74,13 @@ const GetHistoricalWeatherArgsSchema = z.object({
   years_back: z.number().min(1).max(10).default(1).describe("Number of years back to retrieve data (1-10, default: 1 for past year)"),
 });
 
+// Tool 6: Get Hourly Weather
+const GetHourlyWeatherArgsSchema = z.object({
+  city: z.string().describe("City name"),
+  country: z.string().optional().describe("Country code (optional)"),
+  hours: z.number().min(1).max(168).default(24).describe("Number of hours to forecast (1-168, default: 24)"),
+});
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -395,6 +402,40 @@ async function fetchHistoricalWeather(city: string, month: number, country?: str
   };
 }
 
+async function fetchHourlyWeather(city: string, country?: string, hours: number = 24) {
+  const location = await geocodeCity(city, country);
+
+  const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=${location.timezone}&forecast_hours=${hours}`;
+
+  const response = await fetch(weatherUrl);
+
+  if (!response.ok) {
+    throw new Error(`Weather API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+
+  // Map hourly data
+  const hourlyForecast = data.hourly.time.map((time: string, index: number) => ({
+    time,
+    temperature: `${data.hourly.temperature_2m[index]}°C`,
+    feels_like: `${data.hourly.apparent_temperature[index]}°C`,
+    humidity: `${data.hourly.relative_humidity_2m[index]}%`,
+    precipitation: `${data.hourly.precipitation[index]} mm`,
+    weather: WEATHER_CODES[data.hourly.weather_code[index]] || "Unknown",
+    wind_speed: `${data.hourly.wind_speed_10m[index]} km/h`,
+    wind_direction: `${data.hourly.wind_direction_10m[index]}°`,
+    wind_gusts: `${data.hourly.wind_gusts_10m[index]} km/h`,
+  }));
+
+  return {
+    location: `${location.name}, ${location.country}`,
+    timezone: location.timezone,
+    hours_forecasted: hours,
+    hourly_forecast: hourlyForecast,
+  };
+}
+
 // ============================================
 // MCP SERVER SETUP
 // ============================================
@@ -554,6 +595,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["city", "month"],
         },
       },
+
+      // ========================================
+      // TOOL 6: GET HOURLY WEATHER
+      // ========================================
+      {
+        name: "get_hourly_weather",
+        description:
+          "Get hour-by-hour weather forecast for up to 7 days (168 hours). Returns detailed hourly predictions including temperature, feels-like temperature, humidity, precipitation, weather conditions, wind speed, direction, and gusts. Perfect for planning daily activities or tracking weather changes throughout the day.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            city: {
+              type: "string",
+              description: "City name",
+            },
+            country: {
+              type: "string",
+              description: "Optional country code",
+            },
+            hours: {
+              type: "number",
+              description: "Number of hours to forecast (1-168, default: 24)",
+              minimum: 1,
+              maximum: 168,
+            },
+          },
+          required: ["city"],
+        },
+      },
     ],
   };
 });
@@ -649,6 +719,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
+    // ========================================
+    // TOOL 6: GET HOURLY WEATHER
+    // ========================================
+    else if (request.params.name === "get_hourly_weather") {
+      const args = GetHourlyWeatherArgsSchema.parse(request.params.arguments);
+      const hourlyData = await fetchHourlyWeather(args.city, args.country, args.hours);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(hourlyData, null, 2),
+          },
+        ],
+      };
+    }
+
     // Unknown tool
     else {
       throw new Error(`Unknown tool: ${request.params.name}`);
@@ -680,6 +767,7 @@ async function main() {
   console.error("  3. get_weather_alerts - Weather warnings and alerts");
   console.error("  4. get_growing_conditions - Growing Degree Days, solar radiation, and crop conditions");
   console.error("  5. get_historical_weather - Historical weather data for a specific month (up to 10 years)");
+  console.error("  6. get_hourly_weather - Hour-by-hour weather forecast (up to 168 hours)");
 }
 
 main().catch((error) => {

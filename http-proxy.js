@@ -206,6 +206,7 @@ const httpServer = createServer(async (req, res) => {
         health: 'GET /health',
         current: 'GET /weather/current?city=<city>&country=<code>',
         forecast: 'GET /weather/forecast?city=<city>&days=<1-16>&country=<code>',
+        hourly: 'GET /weather/hourly?city=<city>&hours=<1-168>&country=<code>',
         alerts: 'GET /weather/alerts?city=<city>&country=<code>',
         growing: 'GET /weather/growing?city=<city>&baseTemp=<°C>&country=<code>',
         historical: 'GET /weather/historical?city=<city>&month=<1-12>&yearsBack=<1-10>&country=<code>',
@@ -214,6 +215,7 @@ const httpServer = createServer(async (req, res) => {
       examples: {
         current: '/weather/current?city=Manila&country=PH',
         forecast: '/weather/forecast?city=Manila&days=7',
+        hourly: '/weather/hourly?city=Manila&hours=24',
         growing: '/weather/growing?city=Manila&baseTemp=10'
       }
     }, null, 2));
@@ -303,6 +305,22 @@ const httpServer = createServer(async (req, res) => {
     return;
   }
 
+  // GET /weather/hourly
+  if (req.method === 'GET' && urlPath === '/weather/hourly') {
+    const params = parseQuery(req.url);
+    if (!params.city) {
+      sendErrorResponse(res, 400, 'Missing required parameter: city');
+      return;
+    }
+
+    const args = { city: params.city };
+    if (params.country) args.country = params.country;
+    if (params.hours) args.hours = parseInt(params.hours);
+
+    await handleMCPToolCall('get_hourly_weather', args, res);
+    return;
+  }
+
   // Generic POST /call-tool endpoint
   if (req.method === 'POST' && urlPath === '/call-tool') {
     let body = '';
@@ -361,12 +379,14 @@ httpServer.listen(PORT, () => {
     console.log(`   GET  /health                  - Health check`);
     console.log(`   GET  /weather/current         - Current weather`);
     console.log(`   GET  /weather/forecast        - Weather forecast (1-16 days)`);
+    console.log(`   GET  /weather/hourly          - Hourly weather forecast (1-168 hours)`);
     console.log(`   GET  /weather/alerts          - Weather alerts & warnings`);
     console.log(`   GET  /weather/growing         - Growing conditions (GDD, soil)`);
     console.log(`   GET  /weather/historical      - Historical weather data`);
     console.log(`   POST /call-tool               - Generic MCP tool call`);
     console.log(`\n🌾 Example for Agriculture App:`);
     console.log(`   http://localhost:${PORT}/weather/current?city=Manila&country=PH`);
+    console.log(`   http://localhost:${PORT}/weather/hourly?city=Manila&hours=24`);
     console.log(`   http://localhost:${PORT}/weather/growing?city=Manila&baseTemp=10\n`);
   });
 });

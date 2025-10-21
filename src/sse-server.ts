@@ -77,6 +77,12 @@ const GetHistoricalWeatherArgsSchema = z.object({
   years_back: z.number().min(1).max(10).default(1),
 });
 
+const GetHourlyWeatherArgsSchema = z.object({
+  city: z.string(),
+  country: z.string().optional(),
+  hours: z.number().min(1).max(168).default(24),
+});
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -263,6 +269,40 @@ async function fetchHistoricalWeather(city: string, month: number, country?: str
   };
 }
 
+async function fetchHourlyWeather(city: string, country?: string, hours: number = 24) {
+  const location = await geocodeCity(city, country);
+
+  const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=${location.timezone}&forecast_hours=${hours}`;
+
+  const response = await fetch(weatherUrl);
+
+  if (!response.ok) {
+    throw new Error(`Weather API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+
+  // Map hourly data
+  const hourlyForecast = data.hourly.time.map((time: string, index: number) => ({
+    time,
+    temperature: `${data.hourly.temperature_2m[index]}°C`,
+    feels_like: `${data.hourly.apparent_temperature[index]}°C`,
+    humidity: `${data.hourly.relative_humidity_2m[index]}%`,
+    precipitation: `${data.hourly.precipitation[index]} mm`,
+    weather: WEATHER_CODES[data.hourly.weather_code[index]] || "Unknown",
+    wind_speed: `${data.hourly.wind_speed_10m[index]} km/h`,
+    wind_direction: `${data.hourly.wind_direction_10m[index]}°`,
+    wind_gusts: `${data.hourly.wind_gusts_10m[index]} km/h`,
+  }));
+
+  return {
+    location: `${location.name}, ${location.country}`,
+    timezone: location.timezone,
+    hours_forecasted: hours,
+    hourly_forecast: hourlyForecast,
+  };
+}
+
 // ============================================
 // CONNECTION REGISTRY
 // ============================================
@@ -416,6 +456,19 @@ function createMCPServer(): Server {
             required: ["city", "month"],
           },
         },
+        {
+          name: "get_hourly_weather",
+          description: "Get hour-by-hour weather forecast for up to 7 days (168 hours)",
+          inputSchema: {
+            type: "object",
+            properties: {
+              city: { type: "string", description: "City name" },
+              country: { type: "string", description: "Optional country code" },
+              hours: { type: "number", description: "Number of hours (1-168)", minimum: 1, maximum: 168 },
+            },
+            required: ["city"],
+          },
+        },
       ],
     };
   });
@@ -446,6 +499,11 @@ function createMCPServer(): Server {
       if (request.params.name === "get_historical_weather") {
         const args = GetHistoricalWeatherArgsSchema.parse(request.params.arguments);
         const data = await fetchHistoricalWeather(args.city, args.month, args.country, args.years_back);
+        return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+      }
+      if (request.params.name === "get_hourly_weather") {
+        const args = GetHourlyWeatherArgsSchema.parse(request.params.arguments);
+        const data = await fetchHourlyWeather(args.city, args.country, args.hours);
         return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
       }
       throw new Error(`Unknown tool: ${request.params.name}`);
@@ -603,9 +661,10 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.error(`\n🛠️  Available Tools:`);
   console.error(`   1. get_current_weather     - Real-time weather`);
   console.error(`   2. get_weather_forecast    - Multi-day forecast`);
-  console.error(`   3. get_weather_alerts      - Weather alerts`);
-  console.error(`   4. get_growing_conditions  - Growing metrics`);
-  console.error(`   5. get_historical_weather  - Historical data`);
+  console.error(`   3. get_hourly_weather      - Hourly forecast (1-168 hours)`);
+  console.error(`   4. get_weather_alerts      - Weather alerts`);
+  console.error(`   5. get_growing_conditions  - Growing metrics`);
+  console.error(`   6. get_historical_weather  - Historical data`);
   console.error(``);
 });
 
