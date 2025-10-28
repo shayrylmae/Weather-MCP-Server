@@ -42,44 +42,74 @@ const WEATHER_CODES: Record<number, string> = {
 
 // Tool 1: Get Current Weather
 const GetCurrentWeatherArgsSchema = z.object({
-  city: z.string().describe("City name (e.g., 'London', 'New York')"),
+  city: z.string().optional().describe("City name (e.g., 'London', 'New York')"),
   country: z.string().optional().describe("Country code (optional, e.g., 'US', 'GB')"),
-});
+  latitude: z.number().optional().describe("Latitude coordinate"),
+  longitude: z.number().optional().describe("Longitude coordinate"),
+}).refine(
+  (data) => (data.city !== undefined) || (data.latitude !== undefined && data.longitude !== undefined),
+  { message: "Either 'city' or both 'latitude' and 'longitude' must be provided" }
+);
 
 // Tool 2: Get Weather Forecast
 const GetWeatherForecastArgsSchema = z.object({
-  city: z.string().describe("City name"),
+  city: z.string().optional().describe("City name"),
   country: z.string().optional().describe("Country code (optional)"),
+  latitude: z.number().optional().describe("Latitude coordinate"),
+  longitude: z.number().optional().describe("Longitude coordinate"),
   days: z.number().min(1).max(16).default(7).describe("Number of forecast days (1-16, default: 7)"),
-});
+}).refine(
+  (data) => (data.city !== undefined) || (data.latitude !== undefined && data.longitude !== undefined),
+  { message: "Either 'city' or both 'latitude' and 'longitude' must be provided" }
+);
 
 // Tool 3: Get Weather Alerts/Warnings
 const GetWeatherAlertsArgsSchema = z.object({
-  city: z.string().describe("City name"),
+  city: z.string().optional().describe("City name"),
   country: z.string().optional().describe("Country code (optional)"),
-});
+  latitude: z.number().optional().describe("Latitude coordinate"),
+  longitude: z.number().optional().describe("Longitude coordinate"),
+}).refine(
+  (data) => (data.city !== undefined) || (data.latitude !== undefined && data.longitude !== undefined),
+  { message: "Either 'city' or both 'latitude' and 'longitude' must be provided" }
+);
 
 // Tool 4: Get Growing Conditions
 const GetGrowingConditionsArgsSchema = z.object({
-  city: z.string().describe("City name"),
+  city: z.string().optional().describe("City name"),
   country: z.string().optional().describe("Country code (optional)"),
+  latitude: z.number().optional().describe("Latitude coordinate"),
+  longitude: z.number().optional().describe("Longitude coordinate"),
   base_temp: z.number().default(10).describe("Base temperature for growing degree days in °C (default: 10°C)"),
-});
+}).refine(
+  (data) => (data.city !== undefined) || (data.latitude !== undefined && data.longitude !== undefined),
+  { message: "Either 'city' or both 'latitude' and 'longitude' must be provided" }
+);
 
 // Tool 5: Get Historical Weather
 const GetHistoricalWeatherArgsSchema = z.object({
-  city: z.string().describe("City name"),
+  city: z.string().optional().describe("City name"),
   country: z.string().optional().describe("Country code (optional)"),
+  latitude: z.number().optional().describe("Latitude coordinate"),
+  longitude: z.number().optional().describe("Longitude coordinate"),
   month: z.number().min(1).max(12).describe("Month (1-12)"),
   years_back: z.number().min(1).max(10).default(1).describe("Number of years back to retrieve data (1-10, default: 1 for past year)"),
-});
+}).refine(
+  (data) => (data.city !== undefined) || (data.latitude !== undefined && data.longitude !== undefined),
+  { message: "Either 'city' or both 'latitude' and 'longitude' must be provided" }
+);
 
 // Tool 6: Get Hourly Weather
 const GetHourlyWeatherArgsSchema = z.object({
-  city: z.string().describe("City name"),
+  city: z.string().optional().describe("City name"),
   country: z.string().optional().describe("Country code (optional)"),
+  latitude: z.number().optional().describe("Latitude coordinate"),
+  longitude: z.number().optional().describe("Longitude coordinate"),
   hours: z.number().min(1).max(168).default(24).describe("Number of hours to forecast (1-168, default: 24)"),
-});
+}).refine(
+  (data) => (data.city !== undefined) || (data.latitude !== undefined && data.longitude !== undefined),
+  { message: "Either 'city' or both 'latitude' and 'longitude' must be provided" }
+);
 
 // ============================================
 // HELPER FUNCTIONS
@@ -202,8 +232,29 @@ async function geocodeCity(
   throw lastError || new Error('Geocoding failed after all retry attempts');
 }
 
-async function fetchCurrentWeather(city: string, country?: string) {
-  const location = await geocodeCity(city, country);
+async function fetchCurrentWeather(
+  city?: string,
+  country?: string,
+  latitude?: number,
+  longitude?: number
+) {
+  let location: { latitude: number; longitude: number; name: string; country: string; timezone: string };
+
+  // If coordinates provided, use them directly
+  if (latitude !== undefined && longitude !== undefined) {
+    location = {
+      latitude,
+      longitude,
+      name: "Coordinates",
+      country: "",
+      timezone: "auto",
+    };
+  } else if (city) {
+    // Otherwise geocode the city
+    location = await geocodeCity(city, country);
+  } else {
+    throw new Error("Either city or coordinates must be provided");
+  }
 
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m&timezone=${location.timezone}`;
 
@@ -231,8 +282,30 @@ async function fetchCurrentWeather(city: string, country?: string) {
   };
 }
 
-async function fetchWeatherForecast(city: string, country?: string, days: number = 7) {
-  const location = await geocodeCity(city, country);
+async function fetchWeatherForecast(
+  city?: string,
+  country?: string,
+  days: number = 7,
+  latitude?: number,
+  longitude?: number
+) {
+  let location: { latitude: number; longitude: number; name: string; country: string; timezone: string };
+
+  // If coordinates provided, use them directly
+  if (latitude !== undefined && longitude !== undefined) {
+    location = {
+      latitude,
+      longitude,
+      name: "Coordinates",
+      country: "",
+      timezone: "auto",
+    };
+  } else if (city) {
+    // Otherwise geocode the city
+    location = await geocodeCity(city, country);
+  } else {
+    throw new Error("Either city or coordinates must be provided");
+  }
 
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=${location.timezone}&forecast_days=${days}`;
 
@@ -261,9 +334,31 @@ async function fetchWeatherForecast(city: string, country?: string, days: number
   };
 }
 
-async function fetchWeatherAlerts(city: string, country?: string) {
-  const location = await geocodeCity(city, country);
-  const currentWeather = await fetchCurrentWeather(city, country);
+async function fetchWeatherAlerts(
+  city?: string,
+  country?: string,
+  latitude?: number,
+  longitude?: number
+) {
+  let location: { latitude: number; longitude: number; name: string; country: string; timezone: string };
+
+  // If coordinates provided, use them directly
+  if (latitude !== undefined && longitude !== undefined) {
+    location = {
+      latitude,
+      longitude,
+      name: "Coordinates",
+      country: "",
+      timezone: "auto",
+    };
+  } else if (city) {
+    // Otherwise geocode the city
+    location = await geocodeCity(city, country);
+  } else {
+    throw new Error("Either city or coordinates must be provided");
+  }
+
+  const currentWeather = await fetchCurrentWeather(city, country, latitude, longitude);
 
   // Open-Meteo doesn't provide official alerts, but we can create warnings based on conditions
   const alerts: string[] = [];
@@ -300,8 +395,30 @@ async function fetchWeatherAlerts(city: string, country?: string) {
   };
 }
 
-async function fetchGrowingConditions(city: string, country?: string, baseTemp: number = 10) {
-  const location = await geocodeCity(city, country);
+async function fetchGrowingConditions(
+  city?: string,
+  country?: string,
+  baseTemp: number = 10,
+  latitude?: number,
+  longitude?: number
+) {
+  let location: { latitude: number; longitude: number; name: string; country: string; timezone: string };
+
+  // If coordinates provided, use them directly
+  if (latitude !== undefined && longitude !== undefined) {
+    location = {
+      latitude,
+      longitude,
+      name: "Coordinates",
+      country: "",
+      timezone: "auto",
+    };
+  } else if (city) {
+    // Otherwise geocode the city
+    location = await geocodeCity(city, country);
+  } else {
+    throw new Error("Either city or coordinates must be provided");
+  }
 
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,soil_temperature_0_to_7cm,soil_moisture_0_to_7cm&hourly=temperature_2m,shortwave_radiation&timezone=${location.timezone}&forecast_days=1`;
 
@@ -340,8 +457,32 @@ async function fetchGrowingConditions(city: string, country?: string, baseTemp: 
   };
 }
 
-async function fetchHistoricalWeather(city: string, month: number, country?: string, yearsBack: number = 1) {
-  const location = await geocodeCity(city, country);
+async function fetchHistoricalWeather(
+  city?: string,
+  month: number = 1,
+  country?: string,
+  yearsBack: number = 1,
+  latitude?: number,
+  longitude?: number
+) {
+  let location: { latitude: number; longitude: number; name: string; country: string; timezone: string };
+
+  // If coordinates provided, use them directly
+  if (latitude !== undefined && longitude !== undefined) {
+    location = {
+      latitude,
+      longitude,
+      name: "Coordinates",
+      country: "",
+      timezone: "auto",
+    };
+  } else if (city) {
+    // Otherwise geocode the city
+    location = await geocodeCity(city, country);
+  } else {
+    throw new Error("Either city or coordinates must be provided");
+  }
+
   const currentYear = new Date().getFullYear();
   const monthName = new Date(2000, month - 1).toLocaleString('en', { month: 'long' });
 
@@ -402,8 +543,30 @@ async function fetchHistoricalWeather(city: string, month: number, country?: str
   };
 }
 
-async function fetchHourlyWeather(city: string, country?: string, hours: number = 24) {
-  const location = await geocodeCity(city, country);
+async function fetchHourlyWeather(
+  city?: string,
+  country?: string,
+  hours: number = 24,
+  latitude?: number,
+  longitude?: number
+) {
+  let location: { latitude: number; longitude: number; name: string; country: string; timezone: string };
+
+  // If coordinates provided, use them directly
+  if (latitude !== undefined && longitude !== undefined) {
+    location = {
+      latitude,
+      longitude,
+      name: "Coordinates",
+      country: "",
+      timezone: "auto",
+    };
+  } else if (city) {
+    // Otherwise geocode the city
+    location = await geocodeCity(city, country);
+  } else {
+    throw new Error("Either city or coordinates must be provided");
+  }
 
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=${location.timezone}&forecast_hours=${hours}`;
 
@@ -465,20 +628,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_current_weather",
         description:
-          "Get real-time current weather conditions for any city worldwide. Returns temperature, feels-like temperature, humidity, precipitation, weather description, and wind information.",
+          "Get real-time current weather conditions for any city worldwide. Returns temperature, feels-like temperature, humidity, precipitation, weather description, and wind information. Accepts either city name OR latitude/longitude coordinates.",
         inputSchema: {
           type: "object",
           properties: {
             city: {
               type: "string",
-              description: "City name (e.g., 'London', 'Tokyo', 'New York')",
+              description: "City name (e.g., 'London', 'Tokyo', 'New York'). Required if latitude/longitude not provided.",
             },
             country: {
               type: "string",
               description: "Optional country code for disambiguation (e.g., 'US', 'GB', 'JP')",
             },
+            latitude: {
+              type: "number",
+              description: "Latitude coordinate. Must be provided with longitude if city is not specified.",
+            },
+            longitude: {
+              type: "number",
+              description: "Longitude coordinate. Must be provided with latitude if city is not specified.",
+            },
           },
-          required: ["city"],
+          required: [],
         },
       },
 
@@ -488,17 +659,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_weather_forecast",
         description:
-          "Get weather forecast for up to 16 days. Returns daily predictions including max/min temperatures, precipitation, weather conditions, and wind speeds. Perfect for planning trips or events.",
+          "Get weather forecast for up to 16 days. Returns daily predictions including max/min temperatures, precipitation, weather conditions, and wind speeds. Perfect for planning trips or events. Accepts either city name OR latitude/longitude coordinates.",
         inputSchema: {
           type: "object",
           properties: {
             city: {
               type: "string",
-              description: "City name",
+              description: "City name. Required if latitude/longitude not provided.",
             },
             country: {
               type: "string",
               description: "Optional country code",
+            },
+            latitude: {
+              type: "number",
+              description: "Latitude coordinate. Must be provided with longitude if city is not specified.",
+            },
+            longitude: {
+              type: "number",
+              description: "Longitude coordinate. Must be provided with latitude if city is not specified.",
             },
             days: {
               type: "number",
@@ -507,7 +686,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               maximum: 16,
             },
           },
-          required: ["city"],
+          required: [],
         },
       },
 
@@ -517,20 +696,28 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_weather_alerts",
         description:
-          "Check for weather warnings and alerts based on current conditions. Detects extreme temperatures, high winds, heavy precipitation, and severe weather like thunderstorms.",
+          "Check for weather warnings and alerts based on current conditions. Detects extreme temperatures, high winds, heavy precipitation, and severe weather like thunderstorms. Accepts either city name OR latitude/longitude coordinates.",
         inputSchema: {
           type: "object",
           properties: {
             city: {
               type: "string",
-              description: "City name",
+              description: "City name. Required if latitude/longitude not provided.",
             },
             country: {
               type: "string",
               description: "Optional country code",
             },
+            latitude: {
+              type: "number",
+              description: "Latitude coordinate. Must be provided with longitude if city is not specified.",
+            },
+            longitude: {
+              type: "number",
+              description: "Longitude coordinate. Must be provided with latitude if city is not specified.",
+            },
           },
-          required: ["city"],
+          required: [],
         },
       },
 
@@ -540,24 +727,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_growing_conditions",
         description:
-          "Get current growing conditions including Growing Degree Days (GDD), solar radiation, humidity, and soil metrics. Used to predict crop development stages and optimize growing conditions.",
+          "Get current growing conditions including Growing Degree Days (GDD), solar radiation, humidity, and soil metrics. Used to predict crop development stages and optimize growing conditions. Accepts either city name OR latitude/longitude coordinates.",
         inputSchema: {
           type: "object",
           properties: {
             city: {
               type: "string",
-              description: "City name",
+              description: "City name. Required if latitude/longitude not provided.",
             },
             country: {
               type: "string",
               description: "Optional country code",
+            },
+            latitude: {
+              type: "number",
+              description: "Latitude coordinate. Must be provided with longitude if city is not specified.",
+            },
+            longitude: {
+              type: "number",
+              description: "Longitude coordinate. Must be provided with latitude if city is not specified.",
             },
             base_temp: {
               type: "number",
               description: "Base temperature for GDD calculation in °C (default: 10°C, common for many crops)",
             },
           },
-          required: ["city"],
+          required: [],
         },
       },
 
@@ -567,17 +762,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_historical_weather",
         description:
-          "Retrieve historical weather data for a specific month over multiple years. Returns monthly statistics including average, max, and min temperatures, total precipitation, and average wind speed. Default retrieves data for the past year, up to 10 years available.",
+          "Retrieve historical weather data for a specific month over multiple years. Returns monthly statistics including average, max, and min temperatures, total precipitation, and average wind speed. Default retrieves data for the past year, up to 10 years available. Accepts either city name OR latitude/longitude coordinates.",
         inputSchema: {
           type: "object",
           properties: {
             city: {
               type: "string",
-              description: "City name",
+              description: "City name. Required if latitude/longitude not provided.",
             },
             country: {
               type: "string",
               description: "Optional country code",
+            },
+            latitude: {
+              type: "number",
+              description: "Latitude coordinate. Must be provided with longitude if city is not specified.",
+            },
+            longitude: {
+              type: "number",
+              description: "Longitude coordinate. Must be provided with latitude if city is not specified.",
             },
             month: {
               type: "number",
@@ -592,7 +795,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               maximum: 10,
             },
           },
-          required: ["city", "month"],
+          required: ["month"],
         },
       },
 
@@ -602,17 +805,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_hourly_weather",
         description:
-          "Get hour-by-hour weather forecast for up to 7 days (168 hours). Returns detailed hourly predictions including temperature, feels-like temperature, humidity, precipitation, weather conditions, wind speed, direction, and gusts. Perfect for planning daily activities or tracking weather changes throughout the day.",
+          "Get hour-by-hour weather forecast for up to 7 days (168 hours). Returns detailed hourly predictions including temperature, feels-like temperature, humidity, precipitation, weather conditions, wind speed, direction, and gusts. Perfect for planning daily activities or tracking weather changes throughout the day. Accepts either city name OR latitude/longitude coordinates.",
         inputSchema: {
           type: "object",
           properties: {
             city: {
               type: "string",
-              description: "City name",
+              description: "City name. Required if latitude/longitude not provided.",
             },
             country: {
               type: "string",
               description: "Optional country code",
+            },
+            latitude: {
+              type: "number",
+              description: "Latitude coordinate. Must be provided with longitude if city is not specified.",
+            },
+            longitude: {
+              type: "number",
+              description: "Longitude coordinate. Must be provided with latitude if city is not specified.",
             },
             hours: {
               type: "number",
@@ -621,7 +832,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               maximum: 168,
             },
           },
-          required: ["city"],
+          required: [],
         },
       },
     ],
@@ -639,7 +850,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ========================================
     if (request.params.name === "get_current_weather") {
       const args = GetCurrentWeatherArgsSchema.parse(request.params.arguments);
-      const weatherData = await fetchCurrentWeather(args.city, args.country);
+      const weatherData = await fetchCurrentWeather(args.city, args.country, args.latitude, args.longitude);
 
       return {
         content: [
@@ -656,7 +867,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ========================================
     else if (request.params.name === "get_weather_forecast") {
       const args = GetWeatherForecastArgsSchema.parse(request.params.arguments);
-      const forecastData = await fetchWeatherForecast(args.city, args.country, args.days);
+      const forecastData = await fetchWeatherForecast(args.city, args.country, args.days, args.latitude, args.longitude);
 
       return {
         content: [
@@ -673,7 +884,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ========================================
     else if (request.params.name === "get_weather_alerts") {
       const args = GetWeatherAlertsArgsSchema.parse(request.params.arguments);
-      const alertsData = await fetchWeatherAlerts(args.city, args.country);
+      const alertsData = await fetchWeatherAlerts(args.city, args.country, args.latitude, args.longitude);
 
       return {
         content: [
@@ -690,7 +901,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ========================================
     else if (request.params.name === "get_growing_conditions") {
       const args = GetGrowingConditionsArgsSchema.parse(request.params.arguments);
-      const growingData = await fetchGrowingConditions(args.city, args.country, args.base_temp);
+      const growingData = await fetchGrowingConditions(args.city, args.country, args.base_temp, args.latitude, args.longitude);
 
       return {
         content: [
@@ -707,7 +918,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ========================================
     else if (request.params.name === "get_historical_weather") {
       const args = GetHistoricalWeatherArgsSchema.parse(request.params.arguments);
-      const historicalData = await fetchHistoricalWeather(args.city, args.month, args.country, args.years_back);
+      const historicalData = await fetchHistoricalWeather(args.city, args.month, args.country, args.years_back, args.latitude, args.longitude);
 
       return {
         content: [
@@ -724,7 +935,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ========================================
     else if (request.params.name === "get_hourly_weather") {
       const args = GetHourlyWeatherArgsSchema.parse(request.params.arguments);
-      const hourlyData = await fetchHourlyWeather(args.city, args.country, args.hours);
+      const hourlyData = await fetchHourlyWeather(args.city, args.country, args.hours, args.latitude, args.longitude);
 
       return {
         content: [
