@@ -5,36 +5,9 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { geocodeCity, fetchWeatherData, WEATHER_CODES } from "./helpers.js";
 
-// ============================================
-// WEATHER CODE MAPPING (Open-Meteo WMO codes)
-// ============================================
-const WEATHER_CODES: Record<number, string> = {
-  0: "Clear sky",
-  1: "Mainly clear",
-  2: "Partly cloudy",
-  3: "Overcast",
-  45: "Foggy",
-  48: "Depositing rime fog",
-  51: "Light drizzle",
-  53: "Moderate drizzle",
-  55: "Dense drizzle",
-  61: "Slight rain",
-  63: "Moderate rain",
-  65: "Heavy rain",
-  71: "Slight snow fall",
-  73: "Moderate snow fall",
-  75: "Heavy snow fall",
-  77: "Snow grains",
-  80: "Slight rain showers",
-  81: "Moderate rain showers",
-  82: "Violent rain showers",
-  85: "Slight snow showers",
-  86: "Heavy snow showers",
-  95: "Thunderstorm",
-  96: "Thunderstorm with slight hail",
-  99: "Thunderstorm with heavy hail",
-};
+// Weather codes and geocoding are now imported from helpers.js
 
 // ============================================
 // TOOL INPUT SCHEMAS
@@ -111,126 +84,7 @@ const GetHourlyWeatherArgsSchema = z.object({
   { message: "Either 'city' or both 'latitude' and 'longitude' must be provided" }
 );
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-async function geocodeCity(
-  city: string,
-  country?: string,
-  maxRetries: number = 3,
-  timeoutMs: number = 10000
-): Promise<{
-  latitude: number;
-  longitude: number;
-  name: string;
-  country: string;
-  timezone: string;
-}> {
-  const searchQuery = country ? `${city}, ${country}` : city;
-  const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-    searchQuery
-  )}&count=1&language=en&format=json`;
-
-  let lastError: Error | null = null;
-
-  // Retry logic with exponential backoff
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      // Create abort controller for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      const response = await fetch(geoUrl, {
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeoutId));
-
-      if (!response.ok) {
-        // Distinguish between different HTTP errors
-        if (response.status >= 500) {
-          throw new Error(
-            `Geocoding API server error (${response.status}): ${response.statusText}. The service may be temporarily down.`
-          );
-        } else if (response.status === 429) {
-          throw new Error('Geocoding API rate limit exceeded. Please try again later.');
-        } else {
-          throw new Error(
-            `Geocoding API error (${response.status}): ${response.statusText}`
-          );
-        }
-      }
-
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        throw new Error(
-          `Geocoding API returned invalid JSON response. The service may be experiencing issues.`
-        );
-      }
-
-      if (!data.results || data.results.length === 0) {
-        // This is a user error, not an API error - don't retry
-        throw new Error(
-          `City not found: "${city}"${country ? ` in ${country}` : ''}. Please check the spelling and try again.`
-        );
-      }
-
-      const result = data.results[0];
-
-      // Validate the response has required fields
-      if (
-        !result.latitude ||
-        !result.longitude ||
-        !result.name ||
-        !result.timezone
-      ) {
-        throw new Error(
-          'Geocoding API returned incomplete data. The service may be experiencing issues.'
-        );
-      }
-
-      return {
-        latitude: result.latitude,
-        longitude: result.longitude,
-        name: result.name,
-        country: result.country_code || result.country,
-        timezone: result.timezone,
-      };
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-
-      // Don't retry for "city not found" errors or client errors
-      if (
-        lastError.message.includes('City not found') ||
-        lastError.message.includes('rate limit')
-      ) {
-        throw lastError;
-      }
-
-      // Handle abort/timeout errors
-      if (error instanceof Error && error.name === 'AbortError') {
-        lastError = new Error(
-          `Geocoding API request timed out after ${timeoutMs}ms. The service may be slow or down.`
-        );
-      }
-
-      // If this isn't the last attempt, wait before retrying
-      if (attempt < maxRetries - 1) {
-        // Exponential backoff: 1s, 2s, 4s
-        const backoffMs = Math.pow(2, attempt) * 1000;
-        await new Promise((resolve) => setTimeout(resolve, backoffMs));
-        continue;
-      }
-
-      // Last attempt failed, throw the error
-      throw lastError;
-    }
-  }
-
-  // Should never reach here, but TypeScript needs it
-  throw lastError || new Error('Geocoding failed after all retry attempts');
-}
+// Helper functions are now imported from helpers.js
 
 async function fetchCurrentWeather(
   city?: string,
@@ -258,13 +112,8 @@ async function fetchCurrentWeather(
 
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m&timezone=${location.timezone}`;
 
-  const response = await fetch(weatherUrl);
-
-  if (!response.ok) {
-    throw new Error(`Weather API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  // Use fetchWeatherData with improved error handling
+  const data = await fetchWeatherData(weatherUrl);
 
   return {
     location: `${location.name}, ${location.country}`,
@@ -309,13 +158,8 @@ async function fetchWeatherForecast(
 
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=${location.timezone}&forecast_days=${days}`;
 
-  const response = await fetch(weatherUrl);
-
-  if (!response.ok) {
-    throw new Error(`Weather API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  // Use fetchWeatherData with improved error handling
+  const data = await fetchWeatherData(weatherUrl);
 
   const forecast = data.daily.time.map((date: string, index: number) => ({
     date,
@@ -422,13 +266,8 @@ async function fetchGrowingConditions(
 
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&current=temperature_2m,relative_humidity_2m,soil_temperature_0_to_7cm,soil_moisture_0_to_7cm&hourly=temperature_2m,shortwave_radiation&timezone=${location.timezone}&forecast_days=1`;
 
-  const response = await fetch(weatherUrl);
-
-  if (!response.ok) {
-    throw new Error(`Weather API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  // Use fetchWeatherData with improved error handling
+  const data = await fetchWeatherData(weatherUrl);
 
   // Calculate Growing Degree Days (GDD) for today
   const hourlyTemps = data.hourly.temperature_2m.slice(0, 24);
@@ -499,13 +338,8 @@ async function fetchHistoricalWeather(
 
     const weatherUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${location.latitude}&longitude=${location.longitude}&start_date=${startDate}&end_date=${endDate}&daily=weather_code,temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,wind_speed_10m_max&timezone=${location.timezone}`;
 
-    const response = await fetch(weatherUrl);
-
-    if (!response.ok) {
-      throw new Error(`Historical Weather API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    // Use fetchWeatherData with improved error handling
+    const data = await fetchWeatherData(weatherUrl);
 
     // Calculate monthly statistics
     const temps = data.daily.temperature_2m_mean;
@@ -570,13 +404,8 @@ async function fetchHourlyWeather(
 
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=${location.timezone}&forecast_hours=${hours}`;
 
-  const response = await fetch(weatherUrl);
-
-  if (!response.ok) {
-    throw new Error(`Weather API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  // Use fetchWeatherData with improved error handling
+  const data = await fetchWeatherData(weatherUrl);
 
   // Map hourly data
   const hourlyForecast = data.hourly.time.map((time: string, index: number) => ({
